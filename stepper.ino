@@ -1,7 +1,10 @@
 // Notes:
-//In my solution, I assume starting with the switch simulating the fire sensor being off(The fire sensor starts with a Low signal till it senses fire)
-//During the rotation of the robot in 90 degrees in its place it doesnot check the ultrasonic sensors till rotating completely
-//When reaching a dead end the robot moves two steps backward , checks its surroundings for any escape , if it found a free track it will turn , else it moves backward again 
+//. In my solution, I assume starting with the switch simulating the fire sensor being off(The fire sensor starts with a Low signal till it senses fire)
+//. During the rotation of the robot in 90 degrees in its place it doesnot check the ultrasonic sensors till rotating completely
+//. When reaching a dead end the robot moves two steps backward , checks its surroundings for any escape , if it found a free track it will turn , else it moves backward again
+//. To turn right, the rightwheel stepper motor stops while the left wheel motor rotates clockwise and the same idea goes for turning left
+//. assume the robot checks another track to move to when it is at a distance of 10 cm from the obstacle
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- 
 #define StepsPerRev 64
 #define RotSpeed 30
 
@@ -37,7 +40,7 @@
 Stepper leftWheel(StepsPerRev, leftWheelBm, leftWheelBp, leftWheelAm, leftWheelAp);
 Stepper rightWheel(StepsPerRev, rightWheelBm, rightWheelBp, rightWheelAm, rightWheelAp);
 Stepper fan(StepsPerRev, fanBm, fanBp, fanAm, fanAp);
-//variables
+//variables & flags
 unsigned long prevtime = 0;
 unsigned long currenttime = 0;
 unsigned long alerttime = 0;
@@ -49,11 +52,9 @@ bool alerttimeset = 0;
 bool stopMotors = 0;
 int motionStatus = 0; //0: moveforward 1: turn right 2: turn left 3: movebackwards
 int rotationSteps = numStepsToRotate; //two revolutions
-//byte currentStep = 0; //used in the moveMotor function
 bool rotating = 0; //0: the robot is not rotating 1: the robot is currently applying a rotation
 
 void setup() {
-  //Serial.begin(9600);
   pinMode(ledPin, OUTPUT);
   pinMode(PowerSwitch, INPUT);
   
@@ -104,15 +105,12 @@ void loop() {
       case 0:
         //Ordinary rotation of the motor
         rightWheel.step(1);
-        //moveMotor(rightWheelAp, rightWheelAm,rightWheelBp, rightWheelBm);
         leftWheel.step(1);
-        //moveMotor(leftWheelAp, leftWheelAm, leftWheelBp, leftWheelBm);
         break;
       //turn right 90 degrees----------------------------------------------  
       case 1:
         if(rotationSteps){
           leftWheel.step(1);
-          //moveMotor(leftWheelAp, leftWheelAm, leftWheelBp, leftWheelBm);
           rotationSteps -= 1;
           rotating = 1;
          }
@@ -127,7 +125,6 @@ void loop() {
       case 2:        
         if(rotationSteps){
           rightWheel.step(1);
-          //moveMotor(rightWheelAp, rightWheelAm,rightWheelBp, rightWheelBm);
           rotationSteps -= 1;
           rotating = 1;
          }
@@ -143,8 +140,6 @@ void loop() {
         if(rotationSteps){
           rightWheel.step(-(1));
           leftWheel.step(-(1));
-          //moveMotor(leftWheelAp, leftWheelAm, leftWheelBp, leftWheelBm);
-          //moveMotor(rightWheelAp, rightWheelAm,rightWheelBp, rightWheelBm);
           rotationSteps -= 1;
           rotating = 1;  
         }
@@ -152,8 +147,7 @@ void loop() {
           motionStatus = 0;
           rotationSteps = numStepsToRotate;
           rotating = 0;  
-        }
-        break;  
+        }  
       }
     }
     
@@ -215,7 +209,6 @@ void putoff(){
   if(!exitSignal){
     fan.setSpeed(RotSpeed);
     fan.step(1);
-    //moveMotor(fanAp, fanAm,fanBp, fanBm);
   }
   else{
      //reset all the status variables
@@ -228,7 +221,7 @@ void putoff(){
 
 //Calculates the distance of the triggered ultrasonic
 float calcDist(int echopin){
-  //Invoke the ultrasonic sensor to generate ultrasonic waves
+  //Invoke the ultrasonic sensor to generate ultrasonic waves(LOW- HIGH - LOW) Signal on trigger pin 
   unsigned long triggertime;
   triggertime = micros();
   while(micros() - triggertime < 20){
@@ -291,48 +284,10 @@ float calcDist(int echopin){
             break;
           }
         }
-         
-        break;
       }
 //------------------------------------calculate the distance --------------------------------------      
   //0.0344 is the speed of ultrasonic waves in air in cm/ microsecond
+  //we divide by 2 to get the duration between the emission of the wave and the instance it hits a surface 
   distance = (duration / 2) * 0.0344;
   return distance;
 }
-
-//Move the stepper motor
-//void moveMotor(int Ap,int Am,int Bp,int Bm){
-//  pinMode(Ap, OUTPUT);
-//  pinMode(Am, OUTPUT);
-//  pinMode(Bp, OUTPUT);
-//  pinMode(Bm, OUTPUT);
-//  switch(currentStep){
-//    case 0:
-//    digitalWrite(Ap, 1);
-//    digitalWrite(Bp, 1);
-//    digitalWrite(Am, 0);
-//    digitalWrite(Bm, 0);
-//    break;
-//  
-//    case 1:
-//    digitalWrite(Ap, 1);
-//    digitalWrite(Bp, 0);
-//    digitalWrite(Am, 0);
-//    digitalWrite(Bm, 1);
-//    break;
-//  
-//    case 2:
-//    digitalWrite(Ap, 0);
-//    digitalWrite(Bp, 0);
-//    digitalWrite(Am, 1);
-//    digitalWrite(Bm, 1);
-//    break;
-//  
-//    case 3:
-//    digitalWrite(Ap, 0);
-//    digitalWrite(Bp, 1);
-//    digitalWrite(Am, 1);
-//    digitalWrite(Bm, 0);
-//    break;
-//   }
-//}
