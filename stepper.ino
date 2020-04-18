@@ -3,10 +3,12 @@
 //. During the rotation of the robot in 90 degrees in its place it doesnot check the ultrasonic sensors till rotating completely
 //. When reaching a dead end the robot moves two steps backward , checks its surroundings for any escape , if it found a free track it will turn , else it moves backward again
 //. To turn right, the rightwheel stepper motor stops while the left wheel motor rotates clockwise and the same idea goes for turning left
-//. assume the robot checks another track to move to when it is at a distance of 10 cm from the obstacle
+//. assume the robot checks another track to move to when it is at a distance of 10 cm or less from the obstacle
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- 
 #define StepsPerRev 64
 #define RotSpeed 30
+#define forward 1
+#define backward 0
 
 #define leftWheelBm 8
 #define leftWheelBp 10
@@ -33,13 +35,6 @@
 #define rightecho 0
 
 #define numStepsToRotate 128  //Number of steps for two revolutions
-//-----------------------------------------------------------------------------------------------------------------------
-#include <Stepper.h>
-//------------------------------------------------------------------------------------------------------------------------
-//Steppers
-Stepper leftWheel(StepsPerRev, leftWheelBm, leftWheelBp, leftWheelAm, leftWheelAp);
-Stepper rightWheel(StepsPerRev, rightWheelBm, rightWheelBp, rightWheelAm, rightWheelAp);
-Stepper fan(StepsPerRev, fanBm, fanBp, fanAm, fanAp);
 //variables & flags
 unsigned long prevtime = 0;
 unsigned long currenttime = 0;
@@ -54,6 +49,10 @@ int motionStatus = 0; //0: moveforward 1: turn right 2: turn left 3: movebackwar
 int rotationSteps = numStepsToRotate; //two revolutions
 bool rotating = 0; //0: the robot is not rotating 1: the robot is currently applying a rotation
 
+int rightcurrStep = 0;
+int leftcurrStep = 0;
+int fancurrStep = 0;
+
 void setup() {
   pinMode(ledPin, OUTPUT);
   pinMode(PowerSwitch, INPUT);
@@ -62,7 +61,18 @@ void setup() {
   pinMode(leftecho, INPUT);
   pinMode(rightecho, INPUT);
   pinMode(triggerPin, OUTPUT);
-  
+  pinMode(leftWheelAp, OUTPUT);
+  pinMode(leftWheelAm, OUTPUT);
+  pinMode(leftWheelBp, OUTPUT);
+  pinMode(leftWheelBm, OUTPUT);
+  pinMode(rightWheelAp, OUTPUT);
+  pinMode(rightWheelAm, OUTPUT);
+  pinMode(rightWheelBp, OUTPUT);
+  pinMode(rightWheelBm, OUTPUT);
+  pinMode(fanAp, OUTPUT);
+  pinMode(fanAm, OUTPUT);
+  pinMode(fanBp, OUTPUT);
+  pinMode(fanBm, OUTPUT);  
   attachInterrupt(digitalPinToInterrupt(fireSensor), triggerStatus, CHANGE);
 }
 
@@ -97,20 +107,21 @@ void loop() {
     //------------------------------------------------------------------------------------------------------
     
     if(!stopMotors){
-      leftWheel.setSpeed(RotSpeed);
-      rightWheel.setSpeed(RotSpeed);
       //The robot moves according to the motionStatus specified without stopping the loop
       switch(motionStatus){
       //move forwards-------------------------------------------
       case 0:
         //Ordinary rotation of the motor
-        rightWheel.step(1);
-        leftWheel.step(1);
+        rightcurrStep++;
+        leftcurrStep++;
+        moveMotor(rightWheelAp, rightWheelAm, rightWheelBp, rightWheelBm, forward, rightcurrStep, 10000);
+        moveMotor(leftWheelAp, leftWheelAm, leftWheelBp, leftWheelBm, forward, leftcurrStep, 10000);
         break;
       //turn right 90 degrees----------------------------------------------  
       case 1:
         if(rotationSteps){
-          leftWheel.step(1);
+          leftcurrStep ++;
+          moveMotor(leftWheelAp, leftWheelAm, leftWheelBp, leftWheelBm, forward, leftcurrStep, 30000);
           rotationSteps -= 1;
           rotating = 1;
          }
@@ -124,7 +135,8 @@ void loop() {
       //turn left 90 degrees------------------------------------------------  
       case 2:        
         if(rotationSteps){
-          rightWheel.step(1);
+          rightcurrStep ++;
+          moveMotor(rightWheelAp, rightWheelAm, rightWheelBp, rightWheelBm, forward, rightcurrStep, 30000);
           rotationSteps -= 1;
           rotating = 1;
          }
@@ -138,8 +150,10 @@ void loop() {
        //move backwards two wheel revolutions-------------------------------------------
       case 3:
         if(rotationSteps){
-          rightWheel.step(-(1));
-          leftWheel.step(-(1));
+          (rightcurrStep >= 1)? rightcurrStep -- : rightcurrStep = 3;
+          (leftcurrStep >= 1)? leftcurrStep -- : leftcurrStep = 3;
+          moveMotor(rightWheelAp, rightWheelAm, rightWheelBp, rightWheelBm, backward, rightcurrStep, 10000);
+          moveMotor(leftWheelAp, leftWheelAm, leftWheelBp, leftWheelBm, backward, leftcurrStep, 10000);
           rotationSteps -= 1;
           rotating = 1;  
         }
@@ -207,8 +221,8 @@ void triggerStatus(){
 void putoff(){
   //continue as long as no exit signal has been triggered
   if(!exitSignal){
-    fan.setSpeed(RotSpeed);
-    fan.step(1);
+      fancurrStep++;
+      moveMotor(fanAp, fanAm, fanBp, fanBm, forward, fancurrStep, 30000);
   }
   else{
      //reset all the status variables
@@ -290,4 +304,39 @@ float calcDist(int echopin){
   //we divide by 2 to get the duration between the emission of the wave and the instance it hits a surface 
   distance = (duration / 2) * 0.0344;
   return distance;
+}
+
+//Move the stepper motor
+void moveMotor(int Ap, int Am, int Bp, int Bm, int direction, int currentStep, int stepWait){
+  currentStep %= 4;
+  unsigned long waitStart = micros();
+  while(micros() - waitStart < stepWait) {} 
+  switch(currentStep){
+    case 0:
+    digitalWrite(Ap, 1);
+    digitalWrite(Bp, 1);
+    digitalWrite(Am, 0);
+    digitalWrite(Bm, 0);
+    break;
+  
+    case 1:
+    digitalWrite(Ap, 1);
+    digitalWrite(Bp, 0);
+    digitalWrite(Am, 0);
+    digitalWrite(Bm, 1);
+    break;
+  
+    case 2:
+    digitalWrite(Ap, 0);
+    digitalWrite(Bp, 0);
+    digitalWrite(Am, 1);
+    digitalWrite(Bm, 1);
+    break;
+  
+    case 3:
+    digitalWrite(Ap, 0);
+    digitalWrite(Bp, 1);
+    digitalWrite(Am, 1);
+    digitalWrite(Bm, 0);
+   }
 }
